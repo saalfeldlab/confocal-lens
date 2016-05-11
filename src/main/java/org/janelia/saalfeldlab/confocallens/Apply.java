@@ -19,7 +19,6 @@ package org.janelia.saalfeldlab.confocallens;
 import java.awt.Rectangle;
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 
 import org.imagearchive.lsm.reader.Reader;
 
@@ -131,12 +130,19 @@ public class Apply {
 	static private int crop = 0;
 
 	static public boolean setup(final String... args) {
-		if (args.length != 4) return false;
+		if (args.length < 4) return false;
 		impInput = openImagePlus(args[0]);
 		if (impInput == null) return false;
 		pathOutput = args[1];
-		try { if (!new File(pathOutput).getParentFile().mkdirs()) return false; }
-		catch (final Exception e) { return false; }
+		try {
+			final File f = new File(pathOutput).getParentFile();
+			if (f == null || !(f.mkdirs() || f.exists())) return false;
+			System.out.println(f);
+		}
+		catch (final Exception e) {
+			e.printStackTrace(System.err);;
+			return false;
+		}
 		final NonLinearCoordinateTransform t = new NonLinearCoordinateTransform();
 		t.init(args[2]);
 		transform = t;
@@ -150,8 +156,6 @@ public class Apply {
 	 * @throws IOException
 	 */
 	public static void main(final String[] args) throws IOException {
-
-		System.out.println( Arrays.toString(args) );
 
 		if (setup(args)) {
 			impInput.setStack(createTransformedStack(impInput.getStack(), transform, crop));
