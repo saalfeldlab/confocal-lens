@@ -156,6 +156,10 @@ public class Apply {
 		if (setup(args)) {
 			impInput.setStack(createTransformedStack(impInput.getStack(), transform, crop));
 			IJ.saveAsTiff(impInput, pathOutput );
+		} else {
+			System.err.println("Usage: "
+					+ "java ... <input_path> <output_path> \"<lens_model>\" <crop_width>."
+					);
 		}
 	}
 }
