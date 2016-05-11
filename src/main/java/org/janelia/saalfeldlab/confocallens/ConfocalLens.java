@@ -281,6 +281,25 @@ public class ConfocalLens {
 		}
 	}
 
+	final static public void saveTransformedImages(
+			final String dirStr,
+			final Iterable<String> fileNames,
+			final String outDirStr,
+			final CoordinateTransform t,
+			final int cropWidth) {
+		for (final String fileName : fileNames) {
+			final ImagePlus imp = loadAndTransformImagePlus(
+					dirStr,
+					fileName,
+					t,
+					cropWidth);
+			if (imp != null) {
+				IJ.saveAsTiff(imp, outDirStr + fileName + ".tif");
+				//imp.show();
+			}
+		}
+	}
+
 	@SuppressWarnings({"unchecked", "rawtypes"})
 	final static public void createThickSliceStacks(final String dirStr, final Map<String, Double> offsets, final int stepSize) {
 
