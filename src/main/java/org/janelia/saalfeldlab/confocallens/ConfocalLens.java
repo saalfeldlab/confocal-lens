@@ -215,7 +215,7 @@ public class ConfocalLens {
 			final CoordinateTransform t,
 			final int cropWidth,
 			final int meshResolution) {
-		final TransformMesh mesh = new TransformMesh(t, 128, srcStack.getWidth(), srcStack.getHeight());
+		final TransformMesh mesh = new TransformMesh(t, meshResolution, srcStack.getWidth(), srcStack.getHeight());
 		final Rectangle bounds = mesh.getBoundingBox();
 		final ImageStack stack = new ImageStack(bounds.width - 2 * cropWidth, bounds.height - 2 * cropWidth);
 		final TransformMeshMappingWithMasks<TransformMesh> mapping = new TransformMeshMappingWithMasks<TransformMesh>(mesh);
