@@ -1,0 +1,198 @@
+/**
+ * License: GPL
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License 2
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ */
+
+/**
+ * Apply wavelength dependent lens correction to multi-channel input that is
+ * either lsm or tif, several files possible.  Save as single multi-channel tif.
+ *
+ * @author Stephan Saalfeld <saalfelds@janelia.hhmi.org>
+ */
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+import java.awt.Rectangle;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayList;
+
+import org.apache.commons.lang.ArrayUtils;
+import org.imagearchive.lsm.reader.Reader;
+
+import fiji.util.gui.GenericDialogPlus;
+import ij.IJ;
+import ij.CompositeImage;
+import ij.ImagePlus;
+import ij.ImageStack;
+import ij.io.Opener;
+import ij.process.Blitter;
+import ij.process.ImageProcessor;
+import mpicbg.ij.TransformMeshMapping;
+import mpicbg.models.CoordinateTransformMesh;
+import mpicbg.models.CoordinateTransform;
+import mpicbg.models.CoordinateTransformList;
+import mpicbg.trakem2.transform.AffineModel2D;
+import mpicbg.trakem2.transform.NonLinearCoordinateTransform;
+
+class Parameters {
+	String[] imageFilePaths = new String[]{"", ""};
+	String transformsFilePath = "";
+	String outFilePath = "";
+	int cropWidth = 16;
+}
+
+class Transform {
+	String className;
+	String dataString;
+}
+
+class TransformExport {
+	String name;
+	Transform[] transform;
+}
+
+CoordinateTransformList createCoordinateTransform(Transform[] transforms) {
+	CoordinateTransformList ctl = new CoordinateTransformList();
+	for (Transform t : transforms) {
+		Class clazz = Class.forName(t.className);
+		mpicbg.trakem2.transform.CoordinateTransform ct = (mpicbg.trakem2.transform.CoordinateTransform)clazz.newInstance();
+		ct.init(t.dataString);
+		ctl.add(ct);
+	}
+	return ctl;
+}
+
+ImagePlus openImagePlus(String path) {
+	ImagePlus imp;
+	if (path.endsWith(".tif"))
+		imp = new Opener().openImage(path);
+	else if (path.endsWith(".lsm"))
+		imp = new Reader().open(path);
+	else
+		imp = null;
+	return imp;
+}
+
+ImagePlus[] splitChannels(ImagePlus imp) {
+	int nChannels = imp.getNChannels();
+	int nSlices = imp.getNSlices();
+	ImageStack stack = imp.getStack();
+	ImagePlus[] channels = new ImagePlus[nChannels];
+	for (int c = 0; c < nChannels; ++c) {
+		ImageStack channelStack = new ImageStack(imp.getWidth(), imp.getHeight());
+		for (int s = 0; s < nSlices; ++s)
+			channelStack.addSlice(stack.getProcessor(imp.getStackIndex(c + 1, s + 1, 1)));
+
+		channelImp = new ImagePlus(imp.getTitle() + "-" + c, channelStack);
+		channelImp.setCalibration(imp.getCalibration());
+		channelImp.setDimensions(1, nSlices, 1);
+		channels[c] = channelImp;
+	}
+	return channels;
+}
+
+ImagePlus combineChannels(ImagePlus[] channels) {
+	ImageStack stack = new ImageStack(channels[0].getWidth(), channels[0].getHeight());
+	int nSlices = channels[0].getNSlices();
+	for (int s = 0; s < nSlices; ++s)
+		for (int c = 0; c < channels.length; ++c)
+			stack.addSlice(channels[c].getStack().getProcessor(s + 1));
+
+	ImagePlus imp = new ImagePlus(channels[0].getTitle().replaceAll("\\.[^.]*$", "-1-" + channels.length), stack);
+	imp.setCalibration(channels[0].getCalibration());
+	imp.setDimensions(channels.length, nSlices, 1);
+	return imp;
+}
+
+ImageStack createTransformedStack(
+		ImageStack srcStack,
+		CoordinateTransform t,
+		int cropWidth,
+		int meshResolution) {
+	CoordinateTransformMesh mesh = new CoordinateTransformMesh(t, meshResolution, srcStack.getWidth(), srcStack.getHeight());
+	ImageStack stack = new ImageStack(srcStack.getWidth() - 2 * cropWidth, srcStack.getHeight() - 2 * cropWidth);
+	TransformMeshMapping mapping = new TransformMeshMapping(mesh);
+	for (int i = 0; i < srcStack.getSize(); ++i) {
+		ImageProcessor src = srcStack.getProcessor(i + 1);
+		src.setInterpolationMethod(ImageProcessor.BILINEAR);
+		ImageProcessor dst = src.createProcessor(srcStack.getWidth(), srcStack.getHeight());
+		mapping.mapInterpolated(src, dst);
+		ImageProcessor cropped = dst.createProcessor(stack.getWidth(), stack.getHeight());
+		cropped.copyBits(dst, -cropWidth, -cropWidth, Blitter.COPY);
+		stack.addSlice(cropped);
+	}
+	return stack;
+}
+
+ImageStack createTransformedStack(
+		ImageStack srcStack,
+		CoordinateTransform t,
+		int cropWidth) {
+	return createTransformedStack(srcStack, t, cropWidth, 128);
+}
+
+void setup(Parameters p) {
+	GenericDialogPlus gd = new GenericDialogPlus("Apply Lens Correction");
+	gd.addFileField("Stack_1: ", p.imageFilePaths[0]);
+	gd.addFileField("Stack_2: ", p.imageFilePaths[1]);
+	gd.addFileField("Transformations: ", p.transformsFilePath);
+	gd.addDirectoryField("Ouput: ", p.outFilePath);
+	gd.addNumericField("Crop_width: ", p.cropWidth, 0);
+	gd.showDialog();
+	if (!gd.wasCanceled()) {
+		p.imageFilePaths = new String[]{
+			gd.getNextString(),
+			gd.getNextString()};
+		p.transformsFilePath = gd.getNextString();
+		p.outFilePath = gd.getNextString();
+		p.cropWidth = (int)gd.getNextNumber();
+	}
+}
+
+/**
+ * Open a list of images, that each contain one or more channels as an array of single channel images.
+ * Original order of channels is preserved.
+ */
+ImagePlus[] openChannels(String[] filePaths) {
+	ImagePlus[] channels = new ImagePlus[0];
+	for (String filePath : filePaths) {
+		ImagePlus imp = openImagePlus(filePath);
+		if (imp != null)
+			channels = ArrayUtils.addAll(channels, splitChannels(imp));
+	}
+	return channels;
+}
+
+void main() {
+	Parameters p = new Parameters();
+	setup(p);
+	ImagePlus[] channels = openChannels(p.imageFilePaths);
+	Gson gson = new GsonBuilder().setPrettyPrinting().create();
+	TransformExport[] transformExports = gson.fromJson(new FileReader(p.transformsFilePath), TransformExport[].class);
+	for (int i = 0; i < channels.length; ++i) {
+		CoordinateTransform ct = createCoordinateTransform(transformExports[i].transform);
+		ImageStack transformedStack = createTransformedStack(channels[i].getStack(), ct, p.cropWidth);
+		channels[i].setStack(transformedStack);
+	}
+	ImagePlus impCombined = combineChannels(channels);
+	File f = new File(p.outFilePath);
+	if (f == null || !(f.mkdirs() || f.exists())) return;
+	IJ.saveAsTiff(new CompositeImage(impCombined), p.outFilePath + "/" + impCombined.getTitle() + ".tif");
+}
+
+main();
