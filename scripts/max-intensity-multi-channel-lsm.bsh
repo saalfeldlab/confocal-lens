@@ -1,0 +1,61 @@
+import ij.IJ;
+import ij.ImagePlus;
+import ij.io.Opener;
+
+import java.io.File;
+import java.util.Arrays;
+
+import org.apache.commons.io.filefilter.AndFileFilter;
+import org.apache.commons.io.filefilter.FileFileFilter;
+import org.apache.commons.io.filefilter.RegexFileFilter;
+import org.imagearchive.lsm.reader.Reader;
+
+String[] ls(String dirStr, String regex) {
+	File dir = new File(dirStr);
+	if (dir.exists() && dir.isDirectory()) {
+		String[] fileNames = dir.list(
+				new AndFileFilter(
+						FileFileFilter.FILE,
+						new RegexFileFilter(regex)));
+		Arrays.sort(fileNames);
+		return fileNames;
+	}
+	else return new String[0];
+}
+
+ImagePlus openImagePlus(String dirStr, String fileStr) {
+	ImagePlus imp;
+	if (fileStr.endsWith(".tif"))
+		imp = new Opener().openImage(dirStr + fileStr);
+	else if (fileStr.endsWith(".lsm"))
+		imp = new Reader().open(dirStr + fileStr);
+	else
+		imp = null;
+
+	return imp;
+}
+
+// String dir = "/groups/saalfeld/home/saalfelds/experiments/fly-light-lens/LensDistortionImaging_488-beads/Scope3_4X4_TileMosaic_488beads_63X/data_1/";
+// String dir = "/groups/saalfeld/home/saalfelds/experiments/fly-light-lens/LensDistortionImaging_488-beads/Scope6_4X4_TileMosaic_488beads_63X/data_1/";
+// String dir = "/groups/saalfeld/home/saalfelds/experiments/fly-light-lens/LensDistortionImaging_488-beads/Scope2_4X4_TileMosaic_488beads_63X/data_1/";
+String dir = "/groups/saalfeld/home/saalfelds/experiments/fly-light-lens/20160725_multi-color beads/Scope4_4-color_4x4_tile mosaic/data_1/";
+
+String[] files = ls(dir, ".*\\.lsm");
+
+for (String file : files) {
+	ImagePlus imp = openImagePlus(dir, file);
+	IJ.run(imp, "Z Project...", "projection=[Max Intensity]");
+	imp = IJ.getImage();
+	IJ.log(imp.getTitle());
+	int nChannels = imp.getNChannels();
+	for (int c = 1; c <= nChannels; ++c) {
+		IJ.run(imp, "Duplicate...", "duplicate channels=" + c);
+		cimp = IJ.getImage();
+		IJ.log("  " + c + " " + cimp.getTitle());
+		IJ.saveAsTiff(cimp, dir + file + "." + c + ".tif");
+		cimp.close();
+	}
+	imp.close();
+}
+
+IJ.log(Arrays.toString(files));
