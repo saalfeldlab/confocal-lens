@@ -1,0 +1,99 @@
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+import ini.trakem2.display.*;
+import java.awt.Rectangle;
+import java.awt.geom.AffineTransform;
+import ij.*;
+import mpicbg.models.*;
+import mpicbg.trakem2.transform.*;
+
+import java.util.*;
+
+String scope = "scope 6";
+String sample = "bead sample 3";
+
+String[] lambdas = new String[]{
+	"488nm, pass1",
+	"594nm",
+	"488nm, pass2",
+	"561nm",
+	"647nm"};
+
+String format = "%s, %s, %s";
+
+HashMap exportTransform(String name, HashMap[] transform) {
+	HashMap map = new HashMap();
+	map.put("name", name);
+	map.put("transform", transform);
+	return map;
+}
+
+HashMap exportTransform(CoordinateTransform ct) {
+	HashMap map = new HashMap();
+	String className = ct.getClass().getCanonicalName();
+	if (className.equals("lenscorrection.NonLinearTransform"))
+		className = "mpicbg.trakem2.transform.NonLinearCoordinateTransform";
+	map.put("className", ct.getClass().getCanonicalName());
+	map.put("dataString", ct.toDataString());
+	return map;
+}
+
+ArrayList samplePoints(Patch patch) {
+	CoordinateTransform ct = patch.getFullCoordinateTransform();
+	matches = new ArrayList();
+	double scaleX = (patch.getOWidth() - 1.0f) / 63.0f;
+	double scaleY = (patch.getOHeight() - 1.0f) / 63.0f;
+	for (int y = 0; y < 64; ++y) {
+		double ys = scaleY * y;
+		for (int x = 0; x < 64; ++x) {
+			double xs = scaleX * x;
+			Point p = new Point(new double[]{xs, ys});
+			Point q = new Point(new double[]{xs, ys});
+			ct.applyInPlace(p.getL());
+			matches.add(new PointMatch(p, q));
+		}
+	}
+	return matches;
+}
+
+
+Gson gson = new GsonBuilder().setPrettyPrinting().create();
+
+LayerSet layerset = Display.getFront().getLayerSet();
+layerset.setMinimumDimensions();
+
+Rectangle topLeftBox = new Rectangle(100, 100);
+patches = new ArrayList();
+
+for (Layer layer : layerset.getLayers()) {
+	Collection displayables = layer.getDisplayables(Patch.class, topLeftBox);
+	patches.add(displayables.iterator().next());
+}
+
+matches = new ArrayList();
+
+for (Patch patch : patches)
+	matches.addAll(samplePoints(patch));
+
+RigidModel2D model = new RigidModel2D();
+model.fit(matches);
+AffineModel2D affineModel = new AffineModel2D();
+affineModel.set(model.createAffine());
+
+ArrayList transformExports = new ArrayList();
+for (int i = 0; i < patches.size(); ++i) {
+	Patch patch = patches.get(i);
+	CoordinateTransformList ctl = patch.getFullCoordinateTransform();
+	List cts = ctl.getList(null);
+	AffineModel2D affine = cts.get(1);
+	affine.preConcatenate(affineModel);
+	HashMap export = exportTransform(
+		String.format(format, new String[]{scope, sample, lambdas[i]}),
+		new HashMap[]{
+			exportTransform(ctl.get(0)),
+			exportTransform(ctl.get(1))});
+	transformExports.add(export);
+}
+
+IJ.log(gson.toJson(transformExports));
