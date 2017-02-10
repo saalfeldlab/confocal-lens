@@ -1,7 +1,7 @@
 # confocal-lens
 This repository contains some Java classes and scripts to calculate lens-distortion models including chromatic abberation from confocal stacks and how to apply them.
 
-# Multi-color lens distortion and shoft correction
+# Multi-color lens distortion and shift correction
 Please follow the instructions in this [screencast](https://www.youtube.com/watch?v=lPt-WQuniUs).  The approach is equivalent to what we have done for multi-camera calibration across electron microscopes.
 
 # Apply distortion models
