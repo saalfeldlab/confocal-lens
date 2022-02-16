@@ -72,6 +72,22 @@
 			<artifactId>jhdf5</artifactId>
 			<version>14.12.5</version>
 		</dependency>
+		<dependency>
+			<groupId>ome</groupId>
+			<artifactId>bio-formats_plugins</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>ome</groupId>
+			<artifactId>formats-api</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>ome</groupId>
+			<artifactId>formats-gpl</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>ome</groupId>
+			<artifactId>formats-bsd</artifactId>
+		</dependency>
 	</dependencies>
 	<groupId>org.janelia.saalfeldlab</groupId>
 	<version>0.0.1-SNAPSHOT</version>
