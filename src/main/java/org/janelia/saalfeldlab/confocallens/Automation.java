@@ -21,11 +21,14 @@ import ij.ImageStack;
 import ij.io.FileSaver;
 import ij.plugin.HyperStackConverter;
 import ij.plugin.ZProjector;
+import ini.trakem2.ControlWindow;
 import ini.trakem2.Project;
 import ini.trakem2.display.Display;
 import ini.trakem2.display.Layer;
 import ini.trakem2.display.LayerSet;
 import ini.trakem2.display.Patch;
+import lenscorrection.DistortionCorrectionTask;
+import lenscorrection.DistortionCorrectionTask.CorrectDistortionFromSelectionParam;
 import loci.plugins.BF;
 import mpicbg.ij.plugin.NormalizeLocalContrast;
 import mpicbg.trakem2.align.Align;
@@ -183,7 +186,9 @@ public class Automation {
 			
 			
 			//create a new trakem project.
-			Project project = Project.newFSProject("blank", null, "/Users/kawase/lens_test");
+			ControlWindow.setGUIEnabled(false);
+			
+			Project project = Project.newFSProject("blank", null, outdir);
 			LayerSet layerset = project.getRootLayerSet();
 			for (int i = 0; i < layernum; i++)
 				  layerset.getLayer(i, 1, true);
@@ -264,7 +269,7 @@ public class Automation {
 			boolean propagateTransformAfter = false;
 			
 			Rectangle box = null;
-			final HashSet< Layer > emptyLayers = new HashSet< Layer >();
+			HashSet< Layer > emptyLayers = new HashSet< Layer >();
 			for ( final Iterator< Layer > it = layerset.getLayers().iterator(); it.hasNext(); )
 			{
 				/* remove empty layers */
@@ -292,11 +297,175 @@ public class Automation {
 			
 			
 			//Lens correction (All layers)
+			CorrectDistortionFromSelectionParam p = new CorrectDistortionFromSelectionParam();
+			p.sift.initialSigma = 1.6f;
+			p.sift.steps = 3;
+			p.sift.minOctaveSize = 400;
+			p.sift.maxOctaveSize = 900;
+			p.sift.fdSize = 4;
+			p.sift.fdBins = 8;
+			p.rod = 0.92f;
+			p.maxNumThreadsSift = maxNumThreads;
+			
+			p.maxEpsilon = 5.0f;
+			p.minInlierRatio = 0.0f;
+			p.minNumInliers = 5;
+			p.expectedModelIndex = 1;
+			p.multipleHypotheses = true;
+			p.rejectIdentity = false;
+			p.identityTolerance = 5.0f;
+			p.tilesAreInPlace = true;
+			
+			p.desiredModelIndex = 0;
+			p.regularize = false;
+			p.regularizerIndex = 0;
+			p.lambdaRegularize = 0.01;
+			p.maxIterationsOptimize = 2000;
+			p.maxPlateauwidthOptimize = 200;
+			
+			p.dimension = 5;
+			p.lambda = 0.01f;
+			p.clearTransform = true;
+			p.visualize = true;
+			
+			for (int i = 0; i < layernum; i++)
+			{
+				p.firstLayerIndex = i;
+				p.lastLayerIndex = i;
+				final Layer layer = layerset.getLayer(i);
+				ArrayList<Patch> patches = layer.getPatches(true);
+				if (patches.size() > 0)
+					DistortionCorrectionTask.run(p, patches, patches.get(0), layer);
+			}
+			
 			
 			//Align layers. least square
+			param2 = new RegularizedAffineLayerAlignment.Param(
+					8,//SIFTfdBins, 
+					4,//SIFTfdSize, 
+					1.6f,//SIFTinitialSigma, 
+					1200,//SIFTmaxOctaveSize, 
+					400,//SIFTminOctaveSize, 
+					3,//SIFTsteps, 
+					true,//clearCache, 
+					maxNumThreads,//maxNumThreadsSift,
+					0.92f,//rod, 
+					3,//desiredModelIndex,
+					0,//expectedModelIndex, 
+					5.0f,//identityTolerance,
+					0.01f,//lambda, 
+					200.0f,////maxEpsilon,
+					1000,//maxIterationsOptimize,
+					5,//maxNumFailures,
+					5,//maxNumNeighbors, 
+					maxNumThreads,//maxNumThreads, 
+					200,//maxPlateauwidthOptimize,
+					0.0f,//minInlierRatio,
+					20,//minNumInliers,
+					true,//multipleHypotheses,
+					false,//widestSetOnly,
+					true,//regularize, 
+					0,//regularizerIndex, 
+					false,//rejectIdentity, 
+					false//visualize
+			);
+					
+			propagateTransformBefore = false;
+			propagateTransformAfter = false;
+			
+			box = null;
+			emptyLayers = new HashSet< Layer >();
+			for ( final Iterator< Layer > it = layerset.getLayers().iterator(); it.hasNext(); )
+			{
+				/* remove empty layers */
+				final Layer la = it.next();
+				if ( !la.contains( Patch.class, true ) )
+				{
+					emptyLayers.add( la );
+				}
+				else
+				{
+					/* accumulate boxes */
+					if ( null == box ) // The first layer:
+						box = la.getMinimalBoundingBox( Patch.class, true );
+					else
+						box = box.union( la.getMinimalBoundingBox( Patch.class, true ) );
+				}
+			}
+			
+			new RegularizedAffineLayerAlignment().exec(param2, layerset.getLayers(), new HashSet<Layer>(), emptyLayers, box, propagateTransformBefore, propagateTransformAfter, null);
+			
+			
+			//Align layers. least square
+			param2 = new RegularizedAffineLayerAlignment.Param(
+					8,//SIFTfdBins, 
+					4,//SIFTfdSize, 
+					1.6f,//SIFTinitialSigma, 
+					1200,//SIFTmaxOctaveSize, 
+					400,//SIFTminOctaveSize, 
+					3,//SIFTsteps, 
+					true,//clearCache, 
+					maxNumThreads,//maxNumThreadsSift,
+					0.92f,//rod, 
+					3,//desiredModelIndex,
+					0,//expectedModelIndex, 
+					5.0f,//identityTolerance,
+					0.01f,//lambda, 
+					50.0f,////maxEpsilon,
+					1000,//maxIterationsOptimize,
+					5,//maxNumFailures,
+					5,//maxNumNeighbors, 
+					maxNumThreads,//maxNumThreads, 
+					200,//maxPlateauwidthOptimize,
+					0.0f,//minInlierRatio,
+					20,//minNumInliers,
+					true,//multipleHypotheses,
+					false,//widestSetOnly,
+					true,//regularize, 
+					0,//regularizerIndex, 
+					false,//rejectIdentity, 
+					false//visualize
+			);
+					
+			propagateTransformBefore = false;
+			propagateTransformAfter = false;
+			
+			box = null;
+			emptyLayers = new HashSet< Layer >();
+			for ( final Iterator< Layer > it = layerset.getLayers().iterator(); it.hasNext(); )
+			{
+				/* remove empty layers */
+				final Layer la = it.next();
+				if ( !la.contains( Patch.class, true ) )
+				{
+					emptyLayers.add( la );
+				}
+				else
+				{
+					/* accumulate boxes */
+					if ( null == box ) // The first layer:
+						box = la.getMinimalBoundingBox( Patch.class, true );
+					else
+						box = box.union( la.getMinimalBoundingBox( Patch.class, true ) );
+				}
+			}
+			
+			new RegularizedAffineLayerAlignment().exec(param2, layerset.getLayers(), new HashSet<Layer>(), emptyLayers, box, propagateTransformBefore, propagateTransformAfter, null);
+			
 			
 			//output coordinate transform
-			
+			for ( final Iterator< Layer > it = layerset.getLayers().iterator(); it.hasNext(); )
+			{
+				final Layer layer = it.next();
+				ArrayList<Patch> patches = layer.getPatches(true);
+				if (patches.size() > 0)
+				{
+					String xmltxt = patches.get(0).getFullCoordinateTransform().toXML("");
+					String path = outdir + File.separator + patches.get(0).getTitle() + "_transform.xml";
+					Files.write(Paths.get(path), xmltxt.getBytes());
+				}
+			}
+
 			System.out.println("Done");
 			
 		} catch (Exception e) {
