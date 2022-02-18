@@ -45,7 +45,7 @@ public class Automation {
 		List<String> result;
 		try (Stream<Path> flist = Files.list(path)) {
 			result = flist.filter(p -> !Files.isDirectory(p))
-					.map(p -> p.toString().toLowerCase())
+					.map(p -> p.toString())
 					.filter(f -> Arrays.stream(fileExtensions).anyMatch(f::endsWith)).collect(Collectors.toList());
 		}
 		return result;
@@ -68,13 +68,14 @@ public class Automation {
 	public static void main(String[] args)
 	{
 		
-		String dir_path = "/Users/kawase/Scope9_20201119_40X_1024X1024";
+		//String dir_path = "/Users/kawase/Scope9_20201119_40X_1024X1024";
+		String dir_path = "/nrs/scicompsoft/kawaset/Scope9_20201119_40X_1024X1024";
 		
-		String[] extensions = {"lsm"};
+		String[] extensions = {"lsm", "LSM"};
 		
 		try
 		{
-			new ImageJ();
+			//new ImageJ();
 			
 			//read lsm files and generate mip images
 			List<String> flist = findFiles(Paths.get(dir_path), extensions);		
@@ -159,7 +160,9 @@ public class Automation {
 			
 			//save mip images
 			//normalize local contrast brx 127 bry 127 stds 3.0 (all layers)
-			String outdir = "/Users/kawase/lens_test";
+			//String outdir = "/Users/kawase/lens_test";
+			String outdir = "/nrs/scicompsoft/kawaset/lens_test";
+			
 			int brx = 127;
 			int bry = 127;
 			float stds = 3.0f;
@@ -167,7 +170,7 @@ public class Automation {
 			for (int layer_id = 0; layer_id < layernum; layer_id++) 
 			{
 				ImagePlus layer = layers.get(layer_id);
-				layer.show();
+				//layer.show();
 				ImageStack sstack = layer.getStack();
 				ArrayList<String> path_list = new ArrayList<String>();
 				for (int i = 1; i <= sstack.getSize(); i++)
@@ -326,7 +329,7 @@ public class Automation {
 			p.dimension = 5;
 			p.lambda = 0.01f;
 			p.clearTransform = true;
-			p.visualize = true;
+			p.visualize = false;
 			
 			for (int i = 0; i < layernum; i++)
 			{
@@ -463,10 +466,12 @@ public class Automation {
 					String xmltxt = patches.get(0).getFullCoordinateTransform().toXML("");
 					String path = outdir + File.separator + patches.get(0).getTitle() + "_transform.xml";
 					Files.write(Paths.get(path), xmltxt.getBytes());
+					System.out.println(xmltxt);
 				}
 			}
 
 			System.out.println("Done");
+			System.exit(0);
 			
 		} catch (Exception e) {
 			e.printStackTrace();
