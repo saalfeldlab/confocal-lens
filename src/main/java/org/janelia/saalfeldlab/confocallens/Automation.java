@@ -115,325 +115,326 @@ public class Automation {
         String outdir = cmd.getOptionValue("output");
         String parampath = cmd.getOptionValue("param");
         String pname = cmd.getOptionValue("name");
+        
+        System.out.println("input_dir: " + dir_path);
+        System.out.println("output_dir: " + outdir);
+        System.out.println("settings: " + parampath);
+        System.out.println("project_name: " + pname);
 
         if (dir_path.endsWith(File.separator))
         	dir_path = dir_path.substring(0, dir_path.length() - 1);
         if (outdir.endsWith(File.separator))
         	outdir = outdir.substring(0, outdir.length() - 1);
         
-        String jsontxt = "";
-        try
-        {
-        	jsontxt = new String ( Files.readAllBytes( Paths.get(parampath) ) );
-        } 
-        catch (IOException e) 
-        {
-            e.printStackTrace();
-        }
-        JSONObject jo = new JSONObject(jsontxt);
-        
-        int maxNumThreads = Runtime.getRuntime().availableProcessors();
-        
-        JSONObject montage_jo = jo.getJSONObject("montageLayers");
-        Align.ParamOptimize param = new Align.ParamOptimize();
-		param.sift.initialSigma = (float)montage_jo.getDouble("initialSigma");
-		param.sift.steps = montage_jo.getInt("steps");
-		param.sift.minOctaveSize = montage_jo.getInt("minOctaveSize");
-		param.sift.maxOctaveSize = montage_jo.getInt("maxOctaveSize");
-		param.sift.fdSize = montage_jo.getInt("fdSize");
-		param.sift.fdBins = montage_jo.getInt("fdBins");
-		param.rod = (float)montage_jo.getDouble("rod");
-		param.maxEpsilon = (float)montage_jo.getDouble("maxEpsilon");
-		param.minInlierRatio = (float)montage_jo.getDouble("minInlierRatio");
-		param.minNumInliers = montage_jo.getInt("minNumInliers");
-		param.expectedModelIndex = montage_jo.getInt("expectedModelIndex");
-		param.rejectIdentity = montage_jo.getBoolean("rejectIdentity");
-		param.identityTolerance = (float)montage_jo.getDouble("identityTolerance");
-		param.desiredModelIndex = montage_jo.getInt("desiredModelIndex");
-		param.correspondenceWeight = (float)montage_jo.getDouble("correspondenceWeight");
-		param.regularize = montage_jo.getBoolean("regularize");
-		param.maxIterations = montage_jo.getInt("maxIterations");
-		param.maxPlateauwidth = montage_jo.getInt("maxPlateauwidth");
-		param.filterOutliers = montage_jo.getBoolean("filterOutliers");
-		param.meanFactor = (float)montage_jo.getDouble("meanFactor");
-            
-//		param.sift.initialSigma = 1.6f;
-//		param.sift.steps = 3;
-//		param.sift.minOctaveSize = 400;
-//		param.sift.maxOctaveSize = 900;
-//		param.sift.fdSize = 4;
-//		param.sift.fdBins = 8;
-//		param.rod = 0.92f;
-//		param.maxEpsilon = 50.0f;
-//		param.minInlierRatio = 0.0f;
-//		param.minNumInliers = 20;
-//		param.expectedModelIndex = 0;
-//		param.rejectIdentity = false;
-//		param.identityTolerance = 0.5f;
-//		param.desiredModelIndex = 0;
-//		param.correspondenceWeight = 1.0f;
-//		param.regularize = false;
-//		param.maxIterations = 2000;
-//		param.maxPlateauwidth = 200;
-//		param.filterOutliers = false;
-//		param.meanFactor = 3.0f; 
-
-		
-		JSONObject align_jo = jo.getJSONObject("alignLayers");
-		RegularizedAffineLayerAlignment.Param param2 = new RegularizedAffineLayerAlignment.Param(
-				align_jo.getInt("SIFTfdBins"),//SIFTfdBins, 
-				align_jo.getInt("SIFTfdSize"),//SIFTfdSize, 
-				(float)align_jo.getDouble("SIFTinitialSigma"),//SIFTinitialSigma, 
-				align_jo.getInt("SIFTmaxOctaveSize"),//SIFTmaxOctaveSize, 
-				align_jo.getInt("SIFTminOctaveSize"),//SIFTminOctaveSize, 
-				align_jo.getInt("SIFTsteps"),//SIFTsteps, 
-				align_jo.getBoolean("clearCache"),//clearCache, 
-				maxNumThreads,//maxNumThreadsSift,
-				(float)align_jo.getDouble("rod"),//rod, 
-				align_jo.getInt("desiredModelIndex"),//desiredModelIndex,
-				align_jo.getInt("expectedModelIndex"),//expectedModelIndex, 
-				(float)align_jo.getDouble("identityTolerance"),//identityTolerance,
-				(float)align_jo.getDouble("lambda"),//lambda, 
-				(float)align_jo.getDouble("maxEpsilon"),////maxEpsilon,
-				align_jo.getInt("maxIterationsOptimize"),//maxIterationsOptimize,
-				align_jo.getInt("maxNumFailures"),//maxNumFailures,
-				align_jo.getInt("maxNumNeighbors"),//maxNumNeighbors, 
-				maxNumThreads,//maxNumThreads, 
-				align_jo.getInt("maxPlateauwidthOptimize"),//maxPlateauwidthOptimize,
-				(float)align_jo.getDouble("minInlierRatio"),//minInlierRatio,
-				align_jo.getInt("minNumInliers"),//minNumInliers,
-				align_jo.getBoolean("multipleHypotheses"),//multipleHypotheses,
-				align_jo.getBoolean("widestSetOnly"),//widestSetOnly,
-				align_jo.getBoolean("regularize"),//regularize, 
-				align_jo.getInt("regularizerIndex"),//regularizerIndex, 
-				align_jo.getBoolean("rejectIdentity"),//rejectIdentity, 
-				false//visualize
-		);
-		
-//		RegularizedAffineLayerAlignment.Param param2 = new RegularizedAffineLayerAlignment.Param(
-//				8,//SIFTfdBins, 
-//				4,//SIFTfdSize, 
-//				1.6f,//SIFTinitialSigma, 
-//				1200,//SIFTmaxOctaveSize, 
-//				400,//SIFTminOctaveSize, 
-//				3,//SIFTsteps, 
-//				true,//clearCache, 
-//				maxNumThreads,//maxNumThreadsSift,
-//				0.92f,//rod, 
-//				0,//desiredModelIndex,
-//				0,//expectedModelIndex, 
-//				5.0f,//identityTolerance,
-//				0.1f,//lambda, 
-//				200.0f,////maxEpsilon,
-//				1000,//maxIterationsOptimize,
-//				5,//maxNumFailures,
-//				5,//maxNumNeighbors, 
-//				maxNumThreads,//maxNumThreads, 
-//				200,//maxPlateauwidthOptimize,
-//				0.0f,//minInlierRatio,
-//				20,//minNumInliers,
-//				true,//multipleHypotheses,
-//				false,//widestSetOnly,
-//				false,//regularize, 
-//				1,//regularizerIndex, 
-//				false,//rejectIdentity, 
-//				false//visualize
-//		);		
-//		boolean propagateTransformBefore = false;
-//		boolean propagateTransformAfter = false;
-		
-
-		JSONObject cd_jo = jo.getJSONObject("correctDistortion");
-		CorrectDistortionFromSelectionParam p = new CorrectDistortionFromSelectionParam();
-		p.sift.initialSigma = (float)cd_jo.getDouble("initialSigma");
-		p.sift.steps = cd_jo.getInt("steps");
-		p.sift.minOctaveSize = cd_jo.getInt("minOctaveSize");
-		p.sift.maxOctaveSize = cd_jo.getInt("maxOctaveSize");
-		p.sift.fdSize = cd_jo.getInt("fdSize");
-		p.sift.fdBins = cd_jo.getInt("fdBins");
-		p.rod = (float)cd_jo.getDouble("rod");
-		p.maxNumThreadsSift = maxNumThreads;
-		
-		p.maxEpsilon = (float)cd_jo.getDouble("maxEpsilon");
-		p.minInlierRatio = (float)cd_jo.getDouble("minInlierRatio");
-		p.minNumInliers = cd_jo.getInt("minNumInliers");
-		p.expectedModelIndex = cd_jo.getInt("expectedModelIndex");
-		p.multipleHypotheses = cd_jo.getBoolean("multipleHypotheses");
-		p.rejectIdentity = cd_jo.getBoolean("rejectIdentity");
-		p.identityTolerance = (float)cd_jo.getDouble("identityTolerance");
-		p.tilesAreInPlace = cd_jo.getBoolean("tilesAreInPlace");
-		
-		p.desiredModelIndex = cd_jo.getInt("desiredModelIndex");
-		p.regularize = cd_jo.getBoolean("regularize");
-		p.regularizerIndex = cd_jo.getInt("regularizerIndex");
-		p.lambdaRegularize = (float)cd_jo.getDouble("lambdaRegularize");
-		p.maxIterationsOptimize = cd_jo.getInt("maxIterationsOptimize");
-		p.maxPlateauwidthOptimize = cd_jo.getInt("maxPlateauwidthOptimize");
-		
-		p.dimension = cd_jo.getInt("dimension");
-		p.lambda = (float)cd_jo.getDouble("lambda");
-		p.clearTransform = cd_jo.getBoolean("clearTransform");
-		p.visualize = false;
-		
-//		CorrectDistortionFromSelectionParam p = new CorrectDistortionFromSelectionParam();
-//		p.sift.initialSigma = 1.6f;
-//		p.sift.steps = 3;
-//		p.sift.minOctaveSize = 400;
-//		p.sift.maxOctaveSize = 900;
-//		p.sift.fdSize = 4;
-//		p.sift.fdBins = 8;
-//		p.rod = 0.92f;
-//		p.maxNumThreadsSift = maxNumThreads;
-//		
-//		p.maxEpsilon = 5.0f;
-//		p.minInlierRatio = 0.0f;
-//		p.minNumInliers = 5;
-//		p.expectedModelIndex = 1;
-//		p.multipleHypotheses = true;
-//		p.rejectIdentity = false;
-//		p.identityTolerance = 5.0f;
-//		p.tilesAreInPlace = true;
-//		
-//		p.desiredModelIndex = 0;
-//		p.regularize = false;
-//		p.regularizerIndex = 0;
-//		p.lambdaRegularize = 0.01;
-//		p.maxIterationsOptimize = 2000;
-//		p.maxPlateauwidthOptimize = 200;
-//		
-//		p.dimension = 5;
-//		p.lambda = 0.01f;
-//		p.clearTransform = true;
-//		p.visualize = false;
-		
-		JSONObject align2_jo = jo.getJSONObject("alignLayers2");
-		RegularizedAffineLayerAlignment.Param param3 = new RegularizedAffineLayerAlignment.Param(
-				align2_jo.getInt("SIFTfdBins"),//SIFTfdBins, 
-				align2_jo.getInt("SIFTfdSize"),//SIFTfdSize, 
-				(float)align2_jo.getDouble("SIFTinitialSigma"),//SIFTinitialSigma, 
-				align2_jo.getInt("SIFTmaxOctaveSize"),//SIFTmaxOctaveSize, 
-				align2_jo.getInt("SIFTminOctaveSize"),//SIFTminOctaveSize, 
-				align2_jo.getInt("SIFTsteps"),//SIFTsteps, 
-				align2_jo.getBoolean("clearCache"),//clearCache, 
-				maxNumThreads,//maxNumThreadsSift,
-				(float)align2_jo.getDouble("rod"),//rod, 
-				align2_jo.getInt("desiredModelIndex"),//desiredModelIndex,
-				align2_jo.getInt("expectedModelIndex"),//expectedModelIndex, 
-				(float)align2_jo.getDouble("identityTolerance"),//identityTolerance,
-				(float)align2_jo.getDouble("lambda"),//lambda, 
-				(float)align2_jo.getDouble("maxEpsilon"),////maxEpsilon,
-				align2_jo.getInt("maxIterationsOptimize"),//maxIterationsOptimize,
-				align2_jo.getInt("maxNumFailures"),//maxNumFailures,
-				align2_jo.getInt("maxNumNeighbors"),//maxNumNeighbors, 
-				maxNumThreads,//maxNumThreads, 
-				align2_jo.getInt("maxPlateauwidthOptimize"),//maxPlateauwidthOptimize,
-				(float)align2_jo.getDouble("minInlierRatio"),//minInlierRatio,
-				align2_jo.getInt("minNumInliers"),//minNumInliers,
-				align2_jo.getBoolean("multipleHypotheses"),//multipleHypotheses,
-				align2_jo.getBoolean("widestSetOnly"),//widestSetOnly,
-				align2_jo.getBoolean("regularize"),//regularize, 
-				align2_jo.getInt("regularizerIndex"),//regularizerIndex, 
-				align2_jo.getBoolean("rejectIdentity"),//rejectIdentity, 
-				false//visualize
-		);
-//		RegularizedAffineLayerAlignment.Param param3 = new RegularizedAffineLayerAlignment.Param(
-//				8,//SIFTfdBins, 
-//				4,//SIFTfdSize, 
-//				1.6f,//SIFTinitialSigma, 
-//				1200,//SIFTmaxOctaveSize, 
-//				400,//SIFTminOctaveSize, 
-//				3,//SIFTsteps, 
-//				true,//clearCache, 
-//				maxNumThreads,//maxNumThreadsSift,
-//				0.92f,//rod, 
-//				3,//desiredModelIndex,
-//				0,//expectedModelIndex, 
-//				5.0f,//identityTolerance,
-//				0.01f,//lambda, 
-//				200.0f,////maxEpsilon,
-//				1000,//maxIterationsOptimize,
-//				5,//maxNumFailures,
-//				5,//maxNumNeighbors, 
-//				maxNumThreads,//maxNumThreads, 
-//				200,//maxPlateauwidthOptimize,
-//				0.0f,//minInlierRatio,
-//				20,//minNumInliers,
-//				true,//multipleHypotheses,
-//				false,//widestSetOnly,
-//				true,//regularize, 
-//				0,//regularizerIndex, 
-//				false,//rejectIdentity, 
-//				false//visualize
-//		);
-		
-		JSONObject align3_jo = jo.getJSONObject("alignLayers3");
-		RegularizedAffineLayerAlignment.Param param4 = new RegularizedAffineLayerAlignment.Param(
-				align3_jo.getInt("SIFTfdBins"),//SIFTfdBins, 
-				align3_jo.getInt("SIFTfdSize"),//SIFTfdSize, 
-				(float)align3_jo.getDouble("SIFTinitialSigma"),//SIFTinitialSigma, 
-				align3_jo.getInt("SIFTmaxOctaveSize"),//SIFTmaxOctaveSize, 
-				align3_jo.getInt("SIFTminOctaveSize"),//SIFTminOctaveSize, 
-				align3_jo.getInt("SIFTsteps"),//SIFTsteps, 
-				align3_jo.getBoolean("clearCache"),//clearCache, 
-				maxNumThreads,//maxNumThreadsSift,
-				(float)align3_jo.getDouble("rod"),//rod, 
-				align3_jo.getInt("desiredModelIndex"),//desiredModelIndex,
-				align3_jo.getInt("expectedModelIndex"),//expectedModelIndex, 
-				(float)align3_jo.getDouble("identityTolerance"),//identityTolerance,
-				(float)align3_jo.getDouble("lambda"),//lambda, 
-				(float)align3_jo.getDouble("maxEpsilon"),////maxEpsilon,
-				align3_jo.getInt("maxIterationsOptimize"),//maxIterationsOptimize,
-				align3_jo.getInt("maxNumFailures"),//maxNumFailures,
-				align3_jo.getInt("maxNumNeighbors"),//maxNumNeighbors, 
-				maxNumThreads,//maxNumThreads, 
-				align3_jo.getInt("maxPlateauwidthOptimize"),//maxPlateauwidthOptimize,
-				(float)align3_jo.getDouble("minInlierRatio"),//minInlierRatio,
-				align3_jo.getInt("minNumInliers"),//minNumInliers,
-				align3_jo.getBoolean("multipleHypotheses"),//multipleHypotheses,
-				align3_jo.getBoolean("widestSetOnly"),//widestSetOnly,
-				align3_jo.getBoolean("regularize"),//regularize, 
-				align3_jo.getInt("regularizerIndex"),//regularizerIndex, 
-				align3_jo.getBoolean("rejectIdentity"),//rejectIdentity, 
-				false//visualize
-		);
-//		RegularizedAffineLayerAlignment.Param param4 = new RegularizedAffineLayerAlignment.Param(
-//				8,//SIFTfdBins, 
-//				4,//SIFTfdSize, 
-//				1.6f,//SIFTinitialSigma, 
-//				1200,//SIFTmaxOctaveSize, 
-//				400,//SIFTminOctaveSize, 
-//				3,//SIFTsteps, 
-//				true,//clearCache, 
-//				maxNumThreads,//maxNumThreadsSift,
-//				0.92f,//rod, 
-//				3,//desiredModelIndex,
-//				0,//expectedModelIndex, 
-//				5.0f,//identityTolerance,
-//				0.01f,//lambda, 
-//				50.0f,////maxEpsilon,
-//				1000,//maxIterationsOptimize,
-//				5,//maxNumFailures,
-//				5,//maxNumNeighbors, 
-//				maxNumThreads,//maxNumThreads, 
-//				200,//maxPlateauwidthOptimize,
-//				0.0f,//minInlierRatio,
-//				20,//minNumInliers,
-//				true,//multipleHypotheses,
-//				false,//widestSetOnly,
-//				true,//regularize, 
-//				0,//regularizerIndex, 
-//				false,//rejectIdentity, 
-//				false//visualize
-//		);
-		
-		
-		//String dir_path = "/Users/kawase/Scope9_20201119_40X_1024X1024";
-		//String dir_path = "/nrs/scicompsoft/kawaset/Scope9_20201119_40X_1024X1024";
-		
-		String[] extensions = {"lsm", "LSM"};
-		
 		try
 		{
+			String jsontxt = "";
+	        try
+	        {
+	        	jsontxt = new String ( Files.readAllBytes( Paths.get(parampath) ) );
+	        } 
+	        catch (IOException e) 
+	        {
+	            e.printStackTrace();
+	        }
+	        JSONObject jo = new JSONObject(jsontxt);
+	        
+	        int maxNumThreads = Runtime.getRuntime().availableProcessors();
+	        
+	        JSONObject montage_jo = jo.getJSONObject("montageLayers");
+	        Align.ParamOptimize param = new Align.ParamOptimize();
+			param.sift.initialSigma = (float)montage_jo.getDouble("initialSigma");
+			param.sift.steps = montage_jo.getInt("steps");
+			param.sift.minOctaveSize = montage_jo.getInt("minOctaveSize");
+			param.sift.maxOctaveSize = montage_jo.getInt("maxOctaveSize");
+			param.sift.fdSize = montage_jo.getInt("fdSize");
+			param.sift.fdBins = montage_jo.getInt("fdBins");
+			param.rod = (float)montage_jo.getDouble("rod");
+			param.maxEpsilon = (float)montage_jo.getDouble("maxEpsilon");
+			param.minInlierRatio = (float)montage_jo.getDouble("minInlierRatio");
+			param.minNumInliers = montage_jo.getInt("minNumInliers");
+			param.expectedModelIndex = montage_jo.getInt("expectedModelIndex");
+			param.rejectIdentity = montage_jo.getBoolean("rejectIdentity");
+			param.identityTolerance = (float)montage_jo.getDouble("identityTolerance");
+			param.desiredModelIndex = montage_jo.getInt("desiredModelIndex");
+			param.correspondenceWeight = (float)montage_jo.getDouble("correspondenceWeight");
+			param.regularize = montage_jo.getBoolean("regularize");
+			param.maxIterations = montage_jo.getInt("maxIterations");
+			param.maxPlateauwidth = montage_jo.getInt("maxPlateauwidth");
+			param.filterOutliers = montage_jo.getBoolean("filterOutliers");
+			param.meanFactor = (float)montage_jo.getDouble("meanFactor");
+	            
+//			param.sift.initialSigma = 1.6f;
+//			param.sift.steps = 3;
+//			param.sift.minOctaveSize = 400;
+//			param.sift.maxOctaveSize = 900;
+//			param.sift.fdSize = 4;
+//			param.sift.fdBins = 8;
+//			param.rod = 0.92f;
+//			param.maxEpsilon = 50.0f;
+//			param.minInlierRatio = 0.0f;
+//			param.minNumInliers = 20;
+//			param.expectedModelIndex = 0;
+//			param.rejectIdentity = false;
+//			param.identityTolerance = 0.5f;
+//			param.desiredModelIndex = 0;
+//			param.correspondenceWeight = 1.0f;
+//			param.regularize = false;
+//			param.maxIterations = 2000;
+//			param.maxPlateauwidth = 200;
+//			param.filterOutliers = false;
+//			param.meanFactor = 3.0f; 
+
+			
+			JSONObject align_jo = jo.getJSONObject("alignLayers");
+			RegularizedAffineLayerAlignment.Param param2 = new RegularizedAffineLayerAlignment.Param(
+					align_jo.getInt("SIFTfdBins"),//SIFTfdBins, 
+					align_jo.getInt("SIFTfdSize"),//SIFTfdSize, 
+					(float)align_jo.getDouble("SIFTinitialSigma"),//SIFTinitialSigma, 
+					align_jo.getInt("SIFTmaxOctaveSize"),//SIFTmaxOctaveSize, 
+					align_jo.getInt("SIFTminOctaveSize"),//SIFTminOctaveSize, 
+					align_jo.getInt("SIFTsteps"),//SIFTsteps, 
+					align_jo.getBoolean("clearCache"),//clearCache, 
+					maxNumThreads,//maxNumThreadsSift,
+					(float)align_jo.getDouble("rod"),//rod, 
+					align_jo.getInt("desiredModelIndex"),//desiredModelIndex,
+					align_jo.getInt("expectedModelIndex"),//expectedModelIndex, 
+					(float)align_jo.getDouble("identityTolerance"),//identityTolerance,
+					(float)align_jo.getDouble("lambda"),//lambda, 
+					(float)align_jo.getDouble("maxEpsilon"),////maxEpsilon,
+					align_jo.getInt("maxIterationsOptimize"),//maxIterationsOptimize,
+					align_jo.getInt("maxNumFailures"),//maxNumFailures,
+					align_jo.getInt("maxNumNeighbors"),//maxNumNeighbors, 
+					maxNumThreads,//maxNumThreads, 
+					align_jo.getInt("maxPlateauwidthOptimize"),//maxPlateauwidthOptimize,
+					(float)align_jo.getDouble("minInlierRatio"),//minInlierRatio,
+					align_jo.getInt("minNumInliers"),//minNumInliers,
+					align_jo.getBoolean("multipleHypotheses"),//multipleHypotheses,
+					align_jo.getBoolean("widestSetOnly"),//widestSetOnly,
+					align_jo.getBoolean("regularize"),//regularize, 
+					align_jo.getInt("regularizerIndex"),//regularizerIndex, 
+					align_jo.getBoolean("rejectIdentity"),//rejectIdentity, 
+					false//visualize
+			);
+			
+//			RegularizedAffineLayerAlignment.Param param2 = new RegularizedAffineLayerAlignment.Param(
+//					8,//SIFTfdBins, 
+//					4,//SIFTfdSize, 
+//					1.6f,//SIFTinitialSigma, 
+//					1200,//SIFTmaxOctaveSize, 
+//					400,//SIFTminOctaveSize, 
+//					3,//SIFTsteps, 
+//					true,//clearCache, 
+//					maxNumThreads,//maxNumThreadsSift,
+//					0.92f,//rod, 
+//					0,//desiredModelIndex,
+//					0,//expectedModelIndex, 
+//					5.0f,//identityTolerance,
+//					0.1f,//lambda, 
+//					200.0f,////maxEpsilon,
+//					1000,//maxIterationsOptimize,
+//					5,//maxNumFailures,
+//					5,//maxNumNeighbors, 
+//					maxNumThreads,//maxNumThreads, 
+//					200,//maxPlateauwidthOptimize,
+//					0.0f,//minInlierRatio,
+//					20,//minNumInliers,
+//					true,//multipleHypotheses,
+//					false,//widestSetOnly,
+//					false,//regularize, 
+//					1,//regularizerIndex, 
+//					false,//rejectIdentity, 
+//					false//visualize
+//			);		
+//			boolean propagateTransformBefore = false;
+//			boolean propagateTransformAfter = false;
+			
+
+			JSONObject cd_jo = jo.getJSONObject("correctDistortion");
+			CorrectDistortionFromSelectionParam p = new CorrectDistortionFromSelectionParam();
+			p.sift.initialSigma = (float)cd_jo.getDouble("initialSigma");
+			p.sift.steps = cd_jo.getInt("steps");
+			p.sift.minOctaveSize = cd_jo.getInt("minOctaveSize");
+			p.sift.maxOctaveSize = cd_jo.getInt("maxOctaveSize");
+			p.sift.fdSize = cd_jo.getInt("fdSize");
+			p.sift.fdBins = cd_jo.getInt("fdBins");
+			p.rod = (float)cd_jo.getDouble("rod");
+			p.maxNumThreadsSift = maxNumThreads;
+			
+			p.maxEpsilon = (float)cd_jo.getDouble("maxEpsilon");
+			p.minInlierRatio = (float)cd_jo.getDouble("minInlierRatio");
+			p.minNumInliers = cd_jo.getInt("minNumInliers");
+			p.expectedModelIndex = cd_jo.getInt("expectedModelIndex");
+			p.multipleHypotheses = cd_jo.getBoolean("multipleHypotheses");
+			p.rejectIdentity = cd_jo.getBoolean("rejectIdentity");
+			p.identityTolerance = (float)cd_jo.getDouble("identityTolerance");
+			p.tilesAreInPlace = cd_jo.getBoolean("tilesAreInPlace");
+			
+			p.desiredModelIndex = cd_jo.getInt("desiredModelIndex");
+			p.regularize = cd_jo.getBoolean("regularize");
+			p.regularizerIndex = cd_jo.getInt("regularizerIndex");
+			p.lambdaRegularize = (float)cd_jo.getDouble("lambdaRegularize");
+			p.maxIterationsOptimize = cd_jo.getInt("maxIterationsOptimize");
+			p.maxPlateauwidthOptimize = cd_jo.getInt("maxPlateauwidthOptimize");
+			
+			p.dimension = cd_jo.getInt("dimension");
+			p.lambda = (float)cd_jo.getDouble("lambda");
+			p.clearTransform = cd_jo.getBoolean("clearTransform");
+			p.visualize = false;
+			
+//			CorrectDistortionFromSelectionParam p = new CorrectDistortionFromSelectionParam();
+//			p.sift.initialSigma = 1.6f;
+//			p.sift.steps = 3;
+//			p.sift.minOctaveSize = 400;
+//			p.sift.maxOctaveSize = 900;
+//			p.sift.fdSize = 4;
+//			p.sift.fdBins = 8;
+//			p.rod = 0.92f;
+//			p.maxNumThreadsSift = maxNumThreads;
+//			
+//			p.maxEpsilon = 5.0f;
+//			p.minInlierRatio = 0.0f;
+//			p.minNumInliers = 5;
+//			p.expectedModelIndex = 1;
+//			p.multipleHypotheses = true;
+//			p.rejectIdentity = false;
+//			p.identityTolerance = 5.0f;
+//			p.tilesAreInPlace = true;
+//			
+//			p.desiredModelIndex = 0;
+//			p.regularize = false;
+//			p.regularizerIndex = 0;
+//			p.lambdaRegularize = 0.01;
+//			p.maxIterationsOptimize = 2000;
+//			p.maxPlateauwidthOptimize = 200;
+//			
+//			p.dimension = 5;
+//			p.lambda = 0.01f;
+//			p.clearTransform = true;
+//			p.visualize = false;
+			
+			JSONObject align2_jo = jo.getJSONObject("alignLayers2");
+			RegularizedAffineLayerAlignment.Param param3 = new RegularizedAffineLayerAlignment.Param(
+					align2_jo.getInt("SIFTfdBins"),//SIFTfdBins, 
+					align2_jo.getInt("SIFTfdSize"),//SIFTfdSize, 
+					(float)align2_jo.getDouble("SIFTinitialSigma"),//SIFTinitialSigma, 
+					align2_jo.getInt("SIFTmaxOctaveSize"),//SIFTmaxOctaveSize, 
+					align2_jo.getInt("SIFTminOctaveSize"),//SIFTminOctaveSize, 
+					align2_jo.getInt("SIFTsteps"),//SIFTsteps, 
+					align2_jo.getBoolean("clearCache"),//clearCache, 
+					maxNumThreads,//maxNumThreadsSift,
+					(float)align2_jo.getDouble("rod"),//rod, 
+					align2_jo.getInt("desiredModelIndex"),//desiredModelIndex,
+					align2_jo.getInt("expectedModelIndex"),//expectedModelIndex, 
+					(float)align2_jo.getDouble("identityTolerance"),//identityTolerance,
+					(float)align2_jo.getDouble("lambda"),//lambda, 
+					(float)align2_jo.getDouble("maxEpsilon"),////maxEpsilon,
+					align2_jo.getInt("maxIterationsOptimize"),//maxIterationsOptimize,
+					align2_jo.getInt("maxNumFailures"),//maxNumFailures,
+					align2_jo.getInt("maxNumNeighbors"),//maxNumNeighbors, 
+					maxNumThreads,//maxNumThreads, 
+					align2_jo.getInt("maxPlateauwidthOptimize"),//maxPlateauwidthOptimize,
+					(float)align2_jo.getDouble("minInlierRatio"),//minInlierRatio,
+					align2_jo.getInt("minNumInliers"),//minNumInliers,
+					align2_jo.getBoolean("multipleHypotheses"),//multipleHypotheses,
+					align2_jo.getBoolean("widestSetOnly"),//widestSetOnly,
+					align2_jo.getBoolean("regularize"),//regularize, 
+					align2_jo.getInt("regularizerIndex"),//regularizerIndex, 
+					align2_jo.getBoolean("rejectIdentity"),//rejectIdentity, 
+					false//visualize
+			);
+//			RegularizedAffineLayerAlignment.Param param3 = new RegularizedAffineLayerAlignment.Param(
+//					8,//SIFTfdBins, 
+//					4,//SIFTfdSize, 
+//					1.6f,//SIFTinitialSigma, 
+//					1200,//SIFTmaxOctaveSize, 
+//					400,//SIFTminOctaveSize, 
+//					3,//SIFTsteps, 
+//					true,//clearCache, 
+//					maxNumThreads,//maxNumThreadsSift,
+//					0.92f,//rod, 
+//					3,//desiredModelIndex,
+//					0,//expectedModelIndex, 
+//					5.0f,//identityTolerance,
+//					0.01f,//lambda, 
+//					200.0f,////maxEpsilon,
+//					1000,//maxIterationsOptimize,
+//					5,//maxNumFailures,
+//					5,//maxNumNeighbors, 
+//					maxNumThreads,//maxNumThreads, 
+//					200,//maxPlateauwidthOptimize,
+//					0.0f,//minInlierRatio,
+//					20,//minNumInliers,
+//					true,//multipleHypotheses,
+//					false,//widestSetOnly,
+//					true,//regularize, 
+//					0,//regularizerIndex, 
+//					false,//rejectIdentity, 
+//					false//visualize
+//			);
+			
+			JSONObject align3_jo = jo.getJSONObject("alignLayers3");
+			RegularizedAffineLayerAlignment.Param param4 = new RegularizedAffineLayerAlignment.Param(
+					align3_jo.getInt("SIFTfdBins"),//SIFTfdBins, 
+					align3_jo.getInt("SIFTfdSize"),//SIFTfdSize, 
+					(float)align3_jo.getDouble("SIFTinitialSigma"),//SIFTinitialSigma, 
+					align3_jo.getInt("SIFTmaxOctaveSize"),//SIFTmaxOctaveSize, 
+					align3_jo.getInt("SIFTminOctaveSize"),//SIFTminOctaveSize, 
+					align3_jo.getInt("SIFTsteps"),//SIFTsteps, 
+					align3_jo.getBoolean("clearCache"),//clearCache, 
+					maxNumThreads,//maxNumThreadsSift,
+					(float)align3_jo.getDouble("rod"),//rod, 
+					align3_jo.getInt("desiredModelIndex"),//desiredModelIndex,
+					align3_jo.getInt("expectedModelIndex"),//expectedModelIndex, 
+					(float)align3_jo.getDouble("identityTolerance"),//identityTolerance,
+					(float)align3_jo.getDouble("lambda"),//lambda, 
+					(float)align3_jo.getDouble("maxEpsilon"),////maxEpsilon,
+					align3_jo.getInt("maxIterationsOptimize"),//maxIterationsOptimize,
+					align3_jo.getInt("maxNumFailures"),//maxNumFailures,
+					align3_jo.getInt("maxNumNeighbors"),//maxNumNeighbors, 
+					maxNumThreads,//maxNumThreads, 
+					align3_jo.getInt("maxPlateauwidthOptimize"),//maxPlateauwidthOptimize,
+					(float)align3_jo.getDouble("minInlierRatio"),//minInlierRatio,
+					align3_jo.getInt("minNumInliers"),//minNumInliers,
+					align3_jo.getBoolean("multipleHypotheses"),//multipleHypotheses,
+					align3_jo.getBoolean("widestSetOnly"),//widestSetOnly,
+					align3_jo.getBoolean("regularize"),//regularize, 
+					align3_jo.getInt("regularizerIndex"),//regularizerIndex, 
+					align3_jo.getBoolean("rejectIdentity"),//rejectIdentity, 
+					false//visualize
+			);
+//			RegularizedAffineLayerAlignment.Param param4 = new RegularizedAffineLayerAlignment.Param(
+//					8,//SIFTfdBins, 
+//					4,//SIFTfdSize, 
+//					1.6f,//SIFTinitialSigma, 
+//					1200,//SIFTmaxOctaveSize, 
+//					400,//SIFTminOctaveSize, 
+//					3,//SIFTsteps, 
+//					true,//clearCache, 
+//					maxNumThreads,//maxNumThreadsSift,
+//					0.92f,//rod, 
+//					3,//desiredModelIndex,
+//					0,//expectedModelIndex, 
+//					5.0f,//identityTolerance,
+//					0.01f,//lambda, 
+//					50.0f,////maxEpsilon,
+//					1000,//maxIterationsOptimize,
+//					5,//maxNumFailures,
+//					5,//maxNumNeighbors, 
+//					maxNumThreads,//maxNumThreads, 
+//					200,//maxPlateauwidthOptimize,
+//					0.0f,//minInlierRatio,
+//					20,//minNumInliers,
+//					true,//multipleHypotheses,
+//					false,//widestSetOnly,
+//					true,//regularize, 
+//					0,//regularizerIndex, 
+//					false,//rejectIdentity, 
+//					false//visualize
+//			);
+			
+			String[] extensions = {"lsm", "LSM"};
+			
 			//new ImageJ();
 			
 			//read lsm files and generate mip images
@@ -518,10 +519,7 @@ public class Automation {
 			
 			
 			//save mip images
-			//normalize local contrast brx 127 bry 127 stds 3.0 (all layers)
-			//String outdir = "/Users/kawase/lens_test";
-			String outdir = "/nrs/scicompsoft/kawaset/lens_test";
-			
+			//normalize local contrast brx 127 bry 127 stds 3.0 (all layers)			
 			int brx = 127;
 			int bry = 127;
 			float stds = 3.0f;

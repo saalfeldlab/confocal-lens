@@ -127,5 +127,5 @@
         regularize: true,
         regularizerIndex: 0,
         rejectIdentity: false,
-    },
+    }
 }
