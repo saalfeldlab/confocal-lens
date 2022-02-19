@@ -24,6 +24,7 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.commons.io.FileUtils;
 import org.json.JSONObject;
 import org.json.JSONStringer;
 
@@ -519,7 +520,10 @@ public class Automation {
 			
 			
 			//save mip images
-			//normalize local contrast brx 127 bry 127 stds 3.0 (all layers)			
+			//normalize local contrast brx 127 bry 127 stds 3.0 (all layers)
+			String strage_dir = outdir+File.separator+pname;
+			FileUtils.forceMkdir(new File(strage_dir));
+			
 			int brx = 127;
 			int bry = 127;
 			float stds = 3.0f;
@@ -533,10 +537,10 @@ public class Automation {
 				for (int i = 1; i <= sstack.getSize(); i++)
 				{
 					NormalizeLocalContrast.run(sstack.getProcessor(i), brx, bry, stds, true, true);
-					String fname = String.format("layer_%02d_pos_%02d", layer_id, i);
+					String fname = String.format("layer_%02d_pos_%02d.tif", layer_id, i);
 					ImagePlus tmp = new ImagePlus(fname, sstack.getProcessor(i).duplicate());
 					FileSaver saver = new FileSaver(tmp);
-					String fpath = outdir + File.separator + fname;
+					String fpath = strage_dir + File.separator + fname;
 					saver.saveAsTiff(fpath);
 					path_list.add(fpath);
 				}
@@ -548,7 +552,7 @@ public class Automation {
 			//create a new trakem project.
 			ControlWindow.setGUIEnabled(false);
 			
-			Project project = Project.newFSProject("blank", null, outdir);
+			Project project = Project.newFSProject("blank", null, strage_dir);
 			LayerSet layerset = project.getRootLayerSet();
 			for (int i = 0; i < layernum; i++)
 				  layerset.getLayer(i, 1, true);
