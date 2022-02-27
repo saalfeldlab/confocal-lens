@@ -1,5 +1,7 @@
 package org.janelia.saalfeldlab.confocallens;
 
+import java.awt.Color;
+import java.awt.Font;
 import java.awt.Rectangle;
 import java.io.File;
 import java.io.FileReader;
@@ -9,7 +11,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -34,9 +38,16 @@ import ij.ImageStack;
 import ij.io.FileSaver;
 import ij.plugin.HyperStackConverter;
 import ij.plugin.ZProjector;
+import ij.process.Blitter;
+import ij.process.ColorProcessor;
+import ij.process.FloatProcessor;
+import ij.process.ImageConverter;
+import ij.process.ImageProcessor;
+import ij.process.LUT;
 import ini.trakem2.ControlWindow;
 import ini.trakem2.Project;
 import ini.trakem2.display.Display;
+import ini.trakem2.display.Displayable;
 import ini.trakem2.display.Layer;
 import ini.trakem2.display.LayerSet;
 import ini.trakem2.display.Patch;
@@ -44,11 +55,356 @@ import lenscorrection.DistortionCorrectionTask;
 import lenscorrection.DistortionCorrectionTask.CorrectDistortionFromSelectionParam;
 import loci.plugins.BF;
 import mpicbg.ij.plugin.NormalizeLocalContrast;
+
+import mpicbg.models.*;
+//import mpicbg.models.AffineModel2D;
+//import mpicbg.models.CoordinateTransformList;
+//import mpicbg.models.IdentityModel;
+//import mpicbg.models.IllDefinedDataPointsException;
+//import mpicbg.models.Model;
+//import mpicbg.models.NotEnoughDataPointsException;
+//import mpicbg.models.Point;
+//import mpicbg.models.PointMatch;
+//import mpicbg.models.RigidModel2D;
+
 import mpicbg.trakem2.align.Align;
 import mpicbg.trakem2.align.AlignTask;
 import mpicbg.trakem2.align.RegularizedAffineLayerAlignment;
+import mpicbg.trakem2.transform.CoordinateTransform;
+
+import java.awt.geom.AffineTransform;
+import java.awt.image.IndexColorModel;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 public class Automation {
+
+	static String[] lambdas = new String[]{
+		"488nm, pass1",
+		"594nm",
+		"488nm, pass2",
+		"561nm",
+		"647nm"};
+
+	static String format = "%s, %s, %s";
+	
+	static Class<?> invarianceModelClass = IdentityModel.class;
+	
+	static ImageProcessor visualizeDifference(
+			int w,
+			int h,
+			int pWidth,
+			int pHeight,
+			CoordinateTransform ct1,
+			CoordinateTransform ct2) {
+		double sx = (double)pWidth / w;
+		double sy = (double)pHeight / h;
+		FloatProcessor ip = new FloatProcessor(w, h);
+		for (int y = 0; y < h; ++y) {
+			for (int x = 0; x < w; ++x) {
+				double[] l1 = new double[]{x * sx, y * sy};
+				double[] l2 = new double[]{x * sx, y * sy};
+				ct1.applyInPlace(l1);
+				ct2.applyInPlace(l2);
+				double dx = l1[0] - l2[0];
+				double dy = l1[1] - l2[1];
+				double d = Math.sqrt(dx * dx + dy * dy);
+				ip.setf(x, y, (float)d);
+			}
+		}
+		//matrix.copyBits( ip, i * 256, j * 256, Blitter.COPY );
+		return ip;
+	}
+
+	static ImageProcessor visualizeDifferenceVectorDistribution(
+			int w,
+			int h,
+			int pWidth,
+			int pHeight,
+			CoordinateTransformList<?> ct1,
+			CoordinateTransformList<?> ct2,
+			double max) {
+		double hw = 0.5 * w;
+		double hh = 0.5 * h;
+		double sx = (double)pWidth / w;
+		double sy = (double)pHeight / h;
+		FloatProcessor ip = new FloatProcessor(w, h);
+		for (int y = 0; y < h; ++y) {
+			for (int x = 0; x < w; ++x) {
+				double[] l1 = new double[]{x * sx, y * sy};
+				double[] l2 = new double[]{x * sx, y * sy};
+				ct1.applyInPlace(l1);
+				ct2.applyInPlace(l2);
+				double dx = l1[0] - l2[0];
+				double dy = l1[1] - l2[1];
+				dx = Math.min(w - 1, Math.max(0.0, (dx / max + 1) * hw));
+				dy = Math.min(w - 1, Math.max(0.0, (dy / max + 1) * hh));
+				int ix = (int)Math.round(dx);
+				int iy = (int)Math.round(dy);
+				ip.setf(ix, iy, (float)(1.0 + ip.getPixelValue(ix, iy)));
+			}
+		}
+		//matrix.copyBits( ip, i * 256, j * 256, Blitter.COPY );
+		return ip;
+	}
+
+	static ImageProcessor visualizeDifferenceVectors(
+			int w,
+			int h,
+			int pWidth,
+			int pHeight,
+			CoordinateTransformList<?> ct1,
+			CoordinateTransformList<?> ct2,
+			double max) {
+		double sx = (double)pWidth / w;
+		double sy = (double)pHeight / h;
+		ColorProcessor ip = new ColorProcessor(w, h);
+		for (int y = 0; y < h; ++y) {
+			for (int x = 0; x < w; ++x) {
+				double[] l1 = new double[]{x * sx, y * sy};
+				double[] l2 = new double[]{x * sx, y * sy};
+				ct1.applyInPlace(l1);
+				ct2.applyInPlace(l2);
+				double dx = (l1[0] - l2[0] ) / max;
+				double dy = (l1[1] - l2[1] ) / max;
+				double d = Math.sqrt(dx * dx + dy * dy);
+				double s = 1.0 / d;
+				if (s < 1.0) {
+					dx *= s;
+					dy *= s;
+				}
+				
+				ip.set(x, y, mpicbg.ij.util.Util.colorVector(dx, dy));
+			}
+		}
+		return ip;
+	}
+
+	static Model<?> sampleModel(CoordinateTransform ct, Class<?> modelClass, int width, int height) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InstantiationException, IllegalAccessException {
+		Model<?> model = (Model<?>) modelClass.newInstance();
+		ArrayList<PointMatch> matches = new ArrayList<PointMatch>();
+		double scaleX = ((double)width - 1.0f) / 63.0f;
+		double scaleY = ((double)height - 1.0f) / 63.0f;
+		for (int y = 0; y < 64; ++y) {
+			double ys = scaleY * y;
+			for (int x = 0; x < 64; ++x) {
+				double xs = scaleX * x;
+				Point p = new Point(new double[]{xs, ys});
+				p.apply(ct);
+				matches.add(new PointMatch(p, p));
+			}
+		}
+		model.fit(matches);
+		return model;
+	}
+
+	/**
+	 * Estimate a transformation model between two CoordinateTransforms.
+	 * The model maps ct1 into ct2.
+	 * @throws IllDefinedDataPointsException 
+	 * @throws NotEnoughDataPointsException 
+	 * @throws IllegalAccessException 
+	 * @throws InstantiationException 
+	 */
+	static Model<?> sampleModel2(
+			CoordinateTransformList<?> ct1,
+			CoordinateTransformList<?> ct2,
+			Class<?> modelClass,
+			int width,
+			int height) throws NotEnoughDataPointsException, IllDefinedDataPointsException, InstantiationException, IllegalAccessException {
+		Model<?> model = (Model<?>) modelClass.newInstance();
+		ArrayList<PointMatch> matches = new ArrayList<PointMatch>();
+		double scaleX = ((double)width - 1.0f) / 63.0f;
+		double scaleY = ((double)height - 1.0f) / 63.0f;
+		for (int y = 0; y < 64; ++y) {
+			double ys = scaleY * y;
+			for (int x = 0; x < 64; ++x) {
+				double xs = scaleX * x;
+				Point p = new Point(new double[]{xs, ys});
+				Point q = new Point(new double[]{xs, ys});
+				ct1.applyInPlace(p.getL());
+				q.apply(ct2);
+				matches.add(new PointMatch(p, q));
+			}
+		}
+		model.fit(matches);
+		return model;
+	}
+
+
+	static CoordinateTransform createTransform(
+			String className,
+			String dataString) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
+		CoordinateTransform ct = (CoordinateTransform)Class.forName(className).newInstance();
+		ct.init(dataString);
+		return ct;
+	}
+
+	static CoordinateTransformList<mpicbg.models.CoordinateTransform> createTransformList(int j, String[][] transforms) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
+		CoordinateTransformList<mpicbg.models.CoordinateTransform> ctl = new CoordinateTransformList<mpicbg.models.CoordinateTransform>();
+		for (int k = 2; k < transforms[j].length; k +=2)
+			ctl.add(createTransform(transforms[j][k-1], transforms[j][k]));
+		return ctl;
+	}
+
+	static ImagePlus showDifferenceVectors(String[][] transforms, int pWidth, int pHeight, int w, int h, int xSkip, int ySkip, double max) throws InstantiationException, IllegalAccessException, NotEnoughDataPointsException, IllDefinedDataPointsException, ClassNotFoundException {
+		ColorProcessor table = new ColorProcessor(
+			(w + xSkip) * transforms.length - xSkip,
+			(h + ySkip) * transforms.length - ySkip);
+		ImagePlus impTable = new ImagePlus("Matrix", table);
+		impTable.show();
+		
+		for (int i = 0; i < transforms.length; ++i) {
+			CoordinateTransformList<mpicbg.models.CoordinateTransform> ct1 = createTransformList(i, transforms);
+			for (int j = 0; j < transforms.length; ++j) {
+				CoordinateTransformList<mpicbg.models.CoordinateTransform> ct2 = createTransformList(j, transforms);
+		
+				/* fit a simple linear model to compare with using some transferred samples */
+				mpicbg.models.CoordinateTransform t = (mpicbg.models.CoordinateTransform)sampleModel2(ct2, ct1, invarianceModelClass, pWidth, pHeight);
+				ct2.add(t);
+		
+				ImageProcessor ip = visualizeDifferenceVectors(
+					w,
+					h,
+					pWidth,
+					pHeight,
+					ct1,
+					ct2,
+					max);
+		
+				table.copyBits(ip, (w + xSkip) * i, (h + ySkip) * j, Blitter.COPY);
+				impTable.updateAndDraw();
+			}
+		}
+		return impTable;
+	}
+
+
+	static ImagePlus showDifferenceVectorDistributions(String[][] transforms, int pWidth, int pHeight, int w, int h, int xSkip, int ySkip, double max) throws InstantiationException, IllegalAccessException, NotEnoughDataPointsException, IllDefinedDataPointsException, ClassNotFoundException {
+		FloatProcessor table = new FloatProcessor(
+			(w + xSkip) * transforms.length - xSkip,
+			(h + ySkip) * transforms.length - ySkip);
+		ImagePlus impTable = new ImagePlus("Matrix", table);
+		impTable.show();
+		
+		
+		for (int i = 0; i < transforms.length; ++i) {
+			CoordinateTransformList<mpicbg.models.CoordinateTransform> ct1 = createTransformList(i, transforms);
+			for (int j = 0; j < transforms.length; ++j) {
+				CoordinateTransformList<mpicbg.models.CoordinateTransform> ct2 = createTransformList(j, transforms);
+		
+				/* fit a simple linear model to compare with using some transferred samples */
+				mpicbg.models.CoordinateTransform t = (mpicbg.models.CoordinateTransform)sampleModel2(ct2, ct1, invarianceModelClass, pWidth, pHeight);
+				ct2.add(t);
+		
+				ImageProcessor ip = visualizeDifferenceVectorDistribution(
+					w,
+					h,
+					pWidth,
+					pHeight,
+					ct1,
+					ct2,
+					max);
+		
+				table.copyBits(ip, (w + xSkip) * i, (h + ySkip) * j, Blitter.COPY);
+				impTable.updateAndDraw();
+			}
+		}
+		return impTable;
+	}
+
+	static void drawCircles(ColorProcessor ip, String[][] transforms, int w, int h, int xSkip, int ySkip, double max) {
+		for (int s = 1; s <= max; ++s) {
+			ip.setColor(
+				new Color(
+					(float)(Math.min(1.0f, 2.0f * s / max)),
+					(float)(Math.min(1.0f, 2.0f - 2 * s / max)),
+					0.0f));
+			for (int i = 0; i < transforms.length; ++i) {
+				int x = (w + xSkip) * i;
+				for (int j = i + 1; j < transforms.length; ++j) {
+					int y = (h + ySkip) * j;
+					ip.drawOval(
+						(int)(w / 2 + x - Math.round(s * w / max / 2)),
+						(int)(h / 2 + y - Math.round(s * h / max / 2)),
+						(int)Math.round(s * w / max) + 1,
+						(int)Math.round(s * h / max) + 1);
+				}
+			}
+		}
+	}
+
+	static void drawLabels(ImagePlus imp, int offset, String[][] transforms, int w, int h, int xSkip, int ySkip) {
+		ImageProcessor ip = imp.getProcessor().createProcessor(imp.getWidth() + offset, imp.getHeight() +offset);
+		ip.copyBits(imp.getProcessor(), offset, offset, Blitter.COPY);
+		ip.setColor(Color.WHITE);
+		ip.setAntialiasedText(true);
+		ip.setJustification(ImageProcessor.CENTER_JUSTIFY);
+		Font font = new Font(Font.SANS_SERIF, Font.PLAIN, 14);
+		ip.setFont(font);
+		for (int i = 0; i < transforms.length; ++i) {
+			int x = (w + xSkip) * i;
+			ip.drawString(
+				transforms[i][0],
+				(int)(w / 2 + x + offset),
+				20);
+		}
+		ip = ip.rotateRight();
+//		ip.flipHorizontal();
+		ip.setColor(Color.WHITE);
+		ip.setAntialiasedText(true);
+		ip.setJustification(ImageProcessor.CENTER_JUSTIFY);
+		//ip.setFont(font.deriveFont(new AffineTransform(-1, 0, 0, 1, 0, 0)));
+		ip.setFont(font);
+		for (int i = 0; i < transforms.length; ++i) {
+			int x = (w + xSkip) * i;
+			ip.drawString(
+				transforms[transforms.length - 1 - i][0],
+				(int)(w / 2 + x),
+				20);
+		}
+		ip = ip.rotateLeft();
+//		ip.flipHorizontal();
+		imp.setProcessor(ip);
+	}
+
+
+	
+	public static HashMap<String, Object> exportTransform(String name, List<HashMap<String, String>> transform) {
+		HashMap<String, Object> map = new HashMap<String, Object>();
+		map.put("name", name);
+		map.put("transform", transform);
+		return map;
+	}
+
+	public static HashMap<String, String> exportTransform(CoordinateTransform ct) {
+		HashMap<String, String> map = new HashMap<String, String>();
+		String className = ct.getClass().getCanonicalName();
+		if (className.equals("lenscorrection.NonLinearTransform"))
+			className = "mpicbg.trakem2.transform.NonLinearCoordinateTransform";
+		map.put("className", ct.getClass().getCanonicalName());
+		map.put("dataString", ct.toDataString());
+		return map;
+	}
+
+	public static ArrayList<PointMatch> samplePoints(Patch patch) {
+		CoordinateTransform ct = patch.getFullCoordinateTransform();
+		ArrayList<PointMatch> matches = new ArrayList<PointMatch>();
+		double scaleX = (patch.getOWidth() - 1.0f) / 63.0f;
+		double scaleY = (patch.getOHeight() - 1.0f) / 63.0f;
+		for (int y = 0; y < 64; ++y) {
+			double ys = scaleY * y;
+			for (int x = 0; x < 64; ++x) {
+				double xs = scaleX * x;
+				Point p = new Point(new double[]{xs, ys});
+				Point q = new Point(new double[]{xs, ys});
+				ct.applyInPlace(p.getL());
+				matches.add(new PointMatch(p, q));
+			}
+		}
+		return matches;
+	}
 	
 	public static List<String> findFiles(Path path, String[] fileExtensions) throws IOException {
 		if (!Files.isDirectory(path)) {
@@ -77,6 +433,104 @@ public class Automation {
 		return zp.getProjection();
 	}
 	
+	/**
+	 * Interpolates between LUT values such that the result array has the
+	 * specified number of colors.
+	 * 
+	 * @param baseLut
+	 *            the LUT to interpolated
+	 * @param nColors
+	 *            the number of colors of the new LUT
+	 * @return a nColors-by-3 array of color components
+	 */
+	public final static byte[][] interpolateLut(byte[][] baseLut, int nColors) {
+		
+		int n0 = baseLut.length;
+		// allocate memory for new lut
+		byte[][] lut = new byte[nColors][3];
+		
+		// linear interpolation of each color of new lut
+		for (int i = 0; i < nColors; i++) {
+			// compute color index in original lut
+			float i0 = ((float) i) * n0 / nColors;
+			int i1 = (int) Math.floor(i0);
+			
+			// the two surrounding colors
+			byte[] col1 = baseLut[i1];
+			byte[] col2 = baseLut[Math.min(i1 + 1, n0 - 1)];
+
+			// the ratio between the two surrounding colors
+			float f = i0 - i1;
+			
+			// linear interpolation of surrounding colors with cast
+			lut[i][0] = (byte) ((1. - f) * (col1[0] & 0xFF) + f * (col2[0] & 0xFF));
+			lut[i][1] = (byte) ((1. - f) * (col1[1] & 0xFF) + f * (col2[1] & 0xFF));
+			lut[i][2] = (byte) ((1. - f) * (col1[2] & 0xFF) + f * (col2[2] & 0xFF));
+		}
+		
+		return lut;
+	}
+	
+	/**
+	 * Creates a byte array representing the Fire LUT.
+	 * 
+	 * @param nColors
+	 *            number of colors
+	 * @return a nColors-by-3 array of color components.
+	 */
+	public final static byte[][] createFireLut(int nColors) {
+		byte[][] lut = createFireLut();
+		if (nColors != lut.length) 
+			lut = interpolateLut(lut, nColors);
+		return lut;
+	}
+
+	/**
+	 * Creates a byte array representing the Fire LUT.
+	 * 
+	 * @return an array of color components.
+	 */
+	public final static byte[][] createFireLut() {
+		// initial values
+		int[] r = { 0, 0, 1, 25, 49, 73, 98, 122, 146, 162, 173, 184, 195, 207,
+				217, 229, 240, 252, 255, 255, 255, 255, 255, 255, 255, 255,
+				255, 255, 255, 255, 255, 255 };
+		int[] g = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14, 35, 57, 79, 101,
+				117, 133, 147, 161, 175, 190, 205, 219, 234, 248, 255, 255,
+				255, 255 };
+		int[] b = { 0, 61, 96, 130, 165, 192, 220, 227, 210, 181, 151, 122, 93,
+				64, 35, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 98, 160, 223,
+				255 };
+
+		// create map
+		byte[][] map = new byte[r.length][3];
+		
+		// cast elements
+		for (int i = 0; i < r.length; i++) {
+			map[i][0] = (byte) r[i];
+			map[i][1] = (byte) g[i];
+			map[i][2] = (byte) b[i];
+		}
+		
+		return  map;
+	}
+	
+	private static LUT createFireLUT(double maxVal)
+	{
+		byte[][] lut = createFireLut(256);
+		byte[] red = new byte[256];
+		byte[] green = new byte[256];
+		byte[] blue = new byte[256];
+		for (int i = 0; i < 256; i++)
+		{
+			red[i] 		= lut[i][0];
+			green[i] 	= lut[i][1];
+			blue[i] 	= lut[i][2];
+		}
+		IndexColorModel cm = new IndexColorModel(8, 256, red, green, blue);
+		return new LUT(cm, 0, maxVal);
+	}
+	
 	
 	public static void main(String[] args)
 	{
@@ -94,9 +548,13 @@ public class Automation {
         param_op.setRequired(true);
         options.addOption(param_op);
         
-        Option name_op = new Option("n", "name", true, "project name");
-        name_op.setRequired(true);
-        options.addOption(name_op);
+        Option scope_op = new Option("n", "scope", true, "scope name");
+        scope_op.setRequired(true);
+        options.addOption(scope_op);
+        
+        Option sample_op = new Option("s", "sample", true, "sample name");
+        sample_op.setRequired(true);
+        options.addOption(sample_op);
 
         CommandLineParser parser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
@@ -115,7 +573,9 @@ public class Automation {
         String dir_path = cmd.getOptionValue("input");
         String outdir = cmd.getOptionValue("output");
         String parampath = cmd.getOptionValue("param");
-        String pname = cmd.getOptionValue("name");
+        String scope = cmd.getOptionValue("scope");
+        String sample = cmd.getOptionValue("sample");
+        String pname = scope + "_" + sample;
         
         System.out.println("input_dir: " + dir_path);
         System.out.println("output_dir: " + outdir);
@@ -129,6 +589,7 @@ public class Automation {
         
 		try
 		{
+
 			String jsontxt = "";
 	        try
 	        {
@@ -673,22 +1134,134 @@ public class Automation {
 			new RegularizedAffineLayerAlignment().exec(param4, layerset.getLayers(), new HashSet<Layer>(), emptyLayers, box, propagateTransformBefore, propagateTransformAfter, null);
 			
 			
+			//save trakem project
+			project.saveAs(strage_dir + File.separator + pname + "_trakem_proj.xml", true);
+			
+			//String strage_dir = outdir+File.separator+pname;
+			//Project project = Project.openFSProject(strage_dir + File.separator + pname + "_trakem_proj.xml");
+			//LayerSet layerset = project.getRootLayerSet();
+			
 			//output coordinate transform
-			for (int i = 0; i < layernum; i++)
-			{
-				final Layer layer = layerset.getLayer(i);
-				ArrayList<Patch> patches = layer.getPatches(true);
-				if (patches.size() > 0)
-				{
-					String xmltxt = patches.get(0).getFullCoordinateTransform().toXML("");
-					String path = outdir + File.separator + pname + "_ch" + i + "_transform.xml";
-					Files.write(Paths.get(path), xmltxt.getBytes());
-					System.out.println(xmltxt);
+			Gson gson = new GsonBuilder().setPrettyPrinting().create();
+
+			layerset.setMinimumDimensions();
+
+			Rectangle topLeftBox = new Rectangle(100, 100);
+			ArrayList<Patch> patches = new ArrayList<Patch>();
+
+			for (Layer layer : layerset.getLayers()) {
+				Collection<Displayable> displayables = layer.getDisplayables(Patch.class, topLeftBox);
+				patches.add((Patch)displayables.iterator().next());
+			}
+
+			ArrayList<PointMatch> matches = new ArrayList<PointMatch>();
+
+			for (Patch patch : patches)
+				matches.addAll(samplePoints(patch));
+
+			RigidModel2D model = new RigidModel2D();
+			model.fit(matches);
+			AffineModel2D affineModel = new AffineModel2D();
+			affineModel.set(model.createAffine());
+
+			ArrayList<HashMap<String, Object>> transformExports = new ArrayList<HashMap<String, Object>>();
+			for (int i = 0; i < patches.size(); ++i) {
+				Patch patch = patches.get(i);
+				@SuppressWarnings("unchecked")
+				final CoordinateTransformList< CoordinateTransform > ctl = (CoordinateTransformList< CoordinateTransform >) patch.getFullCoordinateTransform();
+				List<CoordinateTransform> cts = ctl.getList(null);
+				AffineModel2D affine = (AffineModel2D) cts.get(1);
+				affine.preConcatenate(affineModel);
+				List<HashMap<String, String>> maplist = new ArrayList<HashMap<String, String>>();
+				maplist.add(exportTransform(ctl.get(0)));
+				maplist.add(exportTransform(ctl.get(1)));
+				HashMap<String, Object> export = exportTransform(
+					String.format(format, scope, sample, lambdas[i]), maplist);
+				transformExports.add(export);
+			}
+			
+			String result_jsontxt = gson.toJson(transformExports);
+			String jsonpath = outdir + File.separator + pname + ".json";
+			Files.write(Paths.get(jsonpath), result_jsontxt.getBytes());
+			System.out.println(result_jsontxt);
+			
+			
+			//compare lenses
+			ArrayList<ArrayList<String>> tr_lists = new ArrayList<ArrayList<String>>();
+			ArrayList<String> temp_id_list = new ArrayList<String>();
+			temp_id_list.add("Identity");
+			temp_id_list.add("mpicbg.trakem2.transform.AffineModel2D");
+			temp_id_list.add("1.0 0.0 0.0 1.0 0.0 0.0");
+			tr_lists.add(temp_id_list);
+			for (int i = 0; i < patches.size(); ++i) {
+				Patch patch = patches.get(i);
+				@SuppressWarnings("unchecked")
+				final CoordinateTransformList< CoordinateTransform > ctl = (CoordinateTransformList< CoordinateTransform >) patch.getFullCoordinateTransform();
+				List<CoordinateTransform> cts = ctl.getList(null);
+				AffineModel2D affine = (AffineModel2D) cts.get(1);
+				affine.preConcatenate(affineModel);
+				ArrayList<String> templist = new ArrayList<String>();
+				String label = String.format(format, scope, sample, lambdas[i]);
+				String classname1 = ctl.get(0).getClass().getName();
+				String ctstr1 = ctl.get(0).toDataString();
+				String classname2 = ctl.get(1).getClass().getName();
+				String ctstr2 = ctl.get(1).toDataString();
+				templist.add(label);
+				templist.add(classname1);
+				templist.add(ctstr1);
+				templist.add(classname2);
+				templist.add(ctstr2);
+				tr_lists.add(templist);
+			}
+			String[][] transforms = new String[tr_lists.size()][];
+			String[] blankArray = new String[0];
+			for(int i = 0; i < tr_lists.size(); i++) {
+				transforms[i] = tr_lists.get(i).toArray(blankArray);
+			}
+			
+			int iw = 256;
+			int ih = 256;
+			double max = 5;
+			int pWidth = 1024;
+			int pHeight = 1024;
+
+			int ySkip = 4;
+			int xSkip = 4;
+			
+			ImagePlus impVectors = showDifferenceVectors(transforms, pWidth, pHeight, iw, ih, xSkip, ySkip, max);
+			ImagePlus impDists = showDifferenceVectorDistributions(transforms, pWidth, pHeight, iw, ih, xSkip, ySkip, max);
+
+			impDists.setDisplayRange(0, 32);
+			Thread.sleep(1000);
+			impDists.setLut(createFireLUT(32.0));
+			Thread.sleep(1000);
+			new ImageConverter(impDists).convertToRGB();
+			Thread.sleep(1000);
+			impDists.getProcessor().snapshot();
+			
+//			{
+//				FileSaver saver = new FileSaver(impDists);
+//				saver.saveAsTiff(outdir + File.separator + pname + "_dists" + ".tif");
+//				FileSaver saver2 = new FileSaver(impVectors);
+//				saver2.saveAsTiff(outdir + File.separator + pname + "_vectors" + ".tif");
+//			}
+			
+			ColorProcessor ip_src = (ColorProcessor)impVectors.getProcessor();
+			ColorProcessor ip_dst = (ColorProcessor)impDists.getProcessor();
+			
+			for(int y = 0; y < ip_src.getHeight(); y++) {
+				for(int x = y; x < ip_src.getWidth(); x++) {
+					ip_dst.set(x, y, ip_src.get(x, y));
 				}
 			}
 			
-			//save trakem project
-			project.saveAs(outdir + File.separator + pname + "_trakem_proj.xml", true);
+			drawCircles((ColorProcessor)impDists.getProcessor(), transforms, iw, ih, xSkip, ySkip, max);
+			drawLabels(impDists, 26, transforms, iw, ih, xSkip, ySkip);
+			
+			FileSaver saver = new FileSaver(impDists);
+			String compare_path = outdir + File.separator + pname + "_compare_lenses" + ".tif";
+			saver.saveAsTiff(compare_path);
+			
 
 			System.out.println("Done");
 			System.exit(0);
